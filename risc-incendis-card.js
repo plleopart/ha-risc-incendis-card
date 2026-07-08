@@ -1,0 +1,566 @@
+class RiscIncendisCard extends HTMLElement {
+  static getStubConfig() {
+    return {
+      entity: "sensor.pla_alfa_avui",
+      tomorrow_entity: "sensor.pla_alfa_dema",
+      title: "Pla Alfa",
+      show_tomorrow: true,
+      show_source: true,
+    };
+  }
+
+  setConfig(config) {
+    if (!config.entity) {
+      throw new Error("entity is required");
+    }
+
+    this.config = {
+      title: "Pla Alfa",
+      show_tomorrow: true,
+      show_source: true,
+      ...config,
+    };
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this.render();
+  }
+
+  getCardSize() {
+    return 4;
+  }
+
+  render() {
+    if (!this.config || !this._hass) {
+      return;
+    }
+
+    const today = this._hass.states[this.config.entity];
+    const tomorrow = this.config.tomorrow_entity
+      ? this._hass.states[this.config.tomorrow_entity]
+      : undefined;
+    const model = buildModel(today, tomorrow, this.config);
+
+    this.attachShadowOnce();
+    this.shadowRoot.innerHTML = `
+      <style>${styles}</style>
+      <ha-card class="risk-card level-${model.levelKey}" tabindex="0" role="button">
+        <button class="more-info" aria-label="Mostra detalls de ${escapeHtml(model.title)}">
+          <ha-icon icon="mdi:dots-horizontal"></ha-icon>
+        </button>
+
+        <section class="hero">
+          <div class="heading">
+            <div class="eyebrow">${escapeHtml(model.title)}</div>
+            <div class="place">${escapeHtml(model.place)}</div>
+          </div>
+          <div class="source-pill">
+            <ha-icon icon="mdi:shield-check"></ha-icon>
+            <span>Font oficial</span>
+          </div>
+        </section>
+
+        <section class="main">
+          <div class="flame" aria-hidden="true">
+            <div class="flame-outer"></div>
+            <div class="flame-inner"></div>
+          </div>
+          <div class="level-block">
+            <div class="level-label">Avui</div>
+            <div class="level-value">${escapeHtml(model.levelLabel)}</div>
+            <div class="description">${escapeHtml(model.description)}</div>
+          </div>
+        </section>
+
+        <section class="scale" aria-label="Escala Pla Alfa">
+          ${[0, 1, 2, 3, 4]
+            .map(
+              (level) => `
+                <div class="scale-step ${model.level === level ? "active" : ""}">
+                  <span>${level}</span>
+                </div>
+              `,
+            )
+            .join("")}
+        </section>
+
+        <section class="details">
+          ${
+            this.config.show_tomorrow
+              ? `
+                <div class="detail tomorrow">
+                  <span class="detail-label">Demà</span>
+                  <span class="detail-value">${escapeHtml(model.tomorrowLabel)}</span>
+                </div>
+              `
+              : ""
+          }
+          ${
+            this.config.show_source
+              ? `
+                <div class="detail">
+                  <span class="detail-label">Actualitzat</span>
+                  <span class="detail-value">${escapeHtml(model.updated)}</span>
+                </div>
+              `
+              : ""
+          }
+        </section>
+      </ha-card>
+    `;
+
+    const card = this.shadowRoot.querySelector("ha-card");
+    const moreInfo = this.shadowRoot.querySelector(".more-info");
+    const showMoreInfo = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.dispatchEvent(
+        new CustomEvent("hass-more-info", {
+          bubbles: true,
+          composed: true,
+          detail: { entityId: this.config.entity },
+        }),
+      );
+    };
+
+    card.addEventListener("click", showMoreInfo);
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        showMoreInfo(event);
+      }
+    });
+    moreInfo.addEventListener("click", showMoreInfo);
+  }
+
+  attachShadowOnce() {
+    if (!this.shadowRoot) {
+      this.attachShadow({ mode: "open" });
+    }
+  }
+}
+
+function buildModel(today, tomorrow, config) {
+  const level = getOfficialLevel(today);
+  const attributes = today?.attributes || {};
+  const municipality = attributes.municipi || attributes.municipality || "";
+  const comarca = attributes.comarca || "";
+  const place = [municipality, comarca].filter(Boolean).join(" · ") || "Sense municipi";
+  const description = attributes.descripcio || describeLevel(level);
+  const updated = formatUpdated(attributes);
+  const tomorrowLevel = getOfficialLevel(tomorrow);
+  const tomorrowDescription =
+    tomorrow?.attributes?.descripcio || describeLevel(tomorrowLevel);
+
+  return {
+    title: config.title || "Pla Alfa",
+    place,
+    level,
+    levelKey: level === null ? "unknown" : String(level),
+    levelLabel: level === null ? "S/D" : String(level),
+    description,
+    tomorrowLabel:
+      tomorrowLevel === null
+        ? "S/D"
+        : `${tomorrowLevel} · ${tomorrowDescription.replace(/^Perill\s+/i, "")}`,
+    updated,
+  };
+}
+
+function getOfficialLevel(stateObj) {
+  if (!stateObj || stateObj.state === "unknown" || stateObj.state === "unavailable") {
+    return null;
+  }
+
+  const value = Number(stateObj.state);
+  if (Number.isInteger(value) && value >= 0 && value <= 4) {
+    return value;
+  }
+
+  return null;
+}
+
+function describeLevel(level) {
+  const descriptions = {
+    0: "Perill baix",
+    1: "Perill moderat",
+    2: "Perill alt",
+    3: "Perill molt alt",
+    4: "Perill extrem",
+  };
+  return level === null ? "Sense dades oficials" : descriptions[level];
+}
+
+function formatUpdated(attributes) {
+  const sourceDate = attributes.ultima_actualitzacio_font;
+  const sourceHour = attributes.hora_font;
+
+  if (!sourceDate && !sourceHour) {
+    return "S/D";
+  }
+
+  if (!sourceDate) {
+    return sourceHour;
+  }
+
+  const parsed = new Date(sourceDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return sourceHour ? `${sourceDate} · ${sourceHour}` : sourceDate;
+  }
+
+  const formatted = parsed.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "2-digit",
+  });
+  return sourceHour ? `${formatted} · ${sourceHour}` : formatted;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+const styles = `
+  :host {
+    display: block;
+  }
+
+  ha-card {
+    --risk-bg: linear-gradient(135deg, #56616b, #8a949d);
+    --risk-accent: #d7dde2;
+    --risk-contrast: #ffffff;
+    --risk-muted: rgba(255, 255, 255, 0.72);
+    --risk-soft: rgba(255, 255, 255, 0.16);
+    position: relative;
+    overflow: hidden;
+    padding: 18px;
+    border-radius: 18px;
+    color: var(--risk-contrast);
+    background: var(--risk-bg);
+    box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0, 0, 0, 0.18));
+    cursor: pointer;
+  }
+
+  ha-card::before {
+    content: "";
+    position: absolute;
+    inset: -28% -12% auto auto;
+    width: 180px;
+    height: 180px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+    pointer-events: none;
+  }
+
+  ha-card::after {
+    content: "";
+    position: absolute;
+    inset: auto auto -42px -34px;
+    width: 170px;
+    height: 170px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.1);
+    pointer-events: none;
+  }
+
+  .level-0 {
+    --risk-bg: linear-gradient(135deg, #f7f8f3, #2f8053);
+    --risk-accent: #0f6b3d;
+    --risk-contrast: #123323;
+    --risk-muted: rgba(18, 51, 35, 0.72);
+    --risk-soft: rgba(15, 107, 61, 0.16);
+  }
+
+  .level-1 {
+    --risk-bg: linear-gradient(135deg, #fff7ad, #c9a400);
+    --risk-accent: #8b6500;
+    --risk-contrast: #302500;
+    --risk-muted: rgba(48, 37, 0, 0.7);
+    --risk-soft: rgba(139, 101, 0, 0.14);
+  }
+
+  .level-2 {
+    --risk-bg: linear-gradient(135deg, #ffbd66, #f06d1a);
+    --risk-accent: #8d2f00;
+    --risk-contrast: #2e1300;
+    --risk-muted: rgba(46, 19, 0, 0.72);
+    --risk-soft: rgba(141, 47, 0, 0.16);
+  }
+
+  .level-3 {
+    --risk-bg: linear-gradient(135deg, #f45b4f, #b91717);
+    --risk-accent: #ffffff;
+    --risk-contrast: #ffffff;
+    --risk-muted: rgba(255, 255, 255, 0.76);
+    --risk-soft: rgba(255, 255, 255, 0.18);
+  }
+
+  .level-4 {
+    --risk-bg: linear-gradient(135deg, #6f0d12, #260305);
+    --risk-accent: #ffd8d8;
+    --risk-contrast: #ffffff;
+    --risk-muted: rgba(255, 255, 255, 0.76);
+    --risk-soft: rgba(255, 255, 255, 0.16);
+  }
+
+  .hero,
+  .main,
+  .scale,
+  .details {
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .eyebrow {
+    font-size: 13px;
+    line-height: 1.2;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    opacity: 0.82;
+  }
+
+  .place {
+    margin-top: 3px;
+    font-size: 18px;
+    line-height: 1.25;
+    font-weight: 800;
+  }
+
+  .source-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+    padding: 6px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--risk-contrast);
+    background: var(--risk-soft);
+  }
+
+  .source-pill ha-icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .more-info {
+    position: absolute;
+    z-index: 2;
+    top: 8px;
+    right: 8px;
+    display: none;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--risk-contrast);
+    background: rgba(255, 255, 255, 0.16);
+    cursor: pointer;
+  }
+
+  ha-card:hover .more-info,
+  ha-card:focus .more-info,
+  ha-card:focus-within .more-info {
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .more-info ha-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 86px 1fr;
+    align-items: center;
+    gap: 18px;
+    margin-top: 22px;
+  }
+
+  .flame {
+    position: relative;
+    width: 86px;
+    height: 104px;
+    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
+  }
+
+  .flame-outer,
+  .flame-inner {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%) rotate(45deg);
+    border-radius: 62% 8% 62% 62%;
+  }
+
+  .flame-outer {
+    width: 68px;
+    height: 68px;
+    background: var(--risk-accent);
+  }
+
+  .flame-inner {
+    width: 38px;
+    height: 38px;
+    bottom: 14px;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .level-label {
+    font-size: 13px;
+    line-height: 1;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--risk-muted);
+  }
+
+  .level-value {
+    margin-top: 3px;
+    font-size: 76px;
+    line-height: 0.92;
+    font-weight: 900;
+  }
+
+  .description {
+    margin-top: 8px;
+    font-size: 18px;
+    line-height: 1.25;
+    font-weight: 800;
+  }
+
+  .scale {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  .scale-step {
+    position: relative;
+    height: 30px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.26);
+  }
+
+  .scale-step span {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+    font-weight: 900;
+    color: var(--risk-contrast);
+  }
+
+  .scale-step.active {
+    background: var(--risk-contrast);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22);
+  }
+
+  .scale-step.active span {
+    color: var(--risk-accent);
+  }
+
+  .details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .detail {
+    min-width: 0;
+    padding: 11px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .detail-label,
+  .detail-value {
+    display: block;
+  }
+
+  .detail-label {
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--risk-muted);
+  }
+
+  .detail-value {
+    overflow: hidden;
+    margin-top: 3px;
+    font-size: 15px;
+    font-weight: 850;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 420px) {
+    ha-card {
+      padding: 16px;
+    }
+
+    .hero {
+      display: block;
+    }
+
+    .source-pill {
+      margin-top: 10px;
+    }
+
+    .main {
+      grid-template-columns: 70px 1fr;
+      gap: 14px;
+    }
+
+    .flame {
+      width: 70px;
+      height: 88px;
+    }
+
+    .flame-outer {
+      width: 56px;
+      height: 56px;
+    }
+
+    .flame-inner {
+      width: 31px;
+      height: 31px;
+    }
+
+    .level-value {
+      font-size: 62px;
+    }
+
+    .details {
+      grid-template-columns: 1fr;
+    }
+  }
+`;
+
+if (!customElements.get("risc-incendis-card")) {
+  customElements.define("risc-incendis-card", RiscIncendisCard);
+}
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "risc-incendis-card",
+  name: "Risc Incendis Card",
+  description: "Visual Pla Alfa wildfire risk card",
+  preview: true,
+});

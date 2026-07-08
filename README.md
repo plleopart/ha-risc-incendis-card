@@ -22,7 +22,7 @@ Provide a visual, dashboard-friendly card for wildfire risk:
 - tomorrow preview when available
 - graceful `unknown` / `S/D` state
 
-## Planned Usage
+## Usage
 
 ```yaml
 type: custom:risc-incendis-card
@@ -39,7 +39,7 @@ entity: sensor.santa_maria_de_besora_pla_alfa_avui
 tomorrow_entity: sensor.santa_maria_de_besora_pla_alfa_dema
 ```
 
-## Planned Options
+## Options
 
 | Option | Required | Description |
 | --- | --- | --- |
@@ -64,17 +64,13 @@ tomorrow_entity: sensor.santa_maria_de_besora_pla_alfa_dema
 
 This repository is intended to be installed as a HACS **Plugin**.
 
-Expected final structure once the card implementation exists:
+Repository structure:
 
 ```text
 risc-incendis-card.js
 hacs.json
 README.md
 ```
-
-At this stage the repository is scaffolded and documented. HACS installation as
-a Plugin will only be useful once `risc-incendis-card.js` has been implemented
-and published in a tagged version.
 
 After installation, add the frontend resource in Home Assistant if HACS does not
 do it automatically:
