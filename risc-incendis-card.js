@@ -473,7 +473,7 @@ const styles = `
     position: absolute;
     left: 50%;
     bottom: 0;
-    transform: translateX(-50%) rotate(45deg);
+    transform: translateX(-50%) rotate(-45deg);
     border-radius: 62% 8% 62% 62%;
   }
 
