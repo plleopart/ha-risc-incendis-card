@@ -206,11 +206,10 @@ function buildModel(today, tomorrow, config) {
   const municipality = attributes.municipi || attributes.municipality || "";
   const comarca = attributes.comarca || "";
   const place = [municipality, comarca].filter(Boolean).join(" · ") || "Sense municipi";
-  const description = attributes.descripcio || describeLevel(level);
+  const description = describeLevel(level);
   const updated = formatUpdated(attributes);
   const tomorrowLevel = getOfficialLevel(tomorrow);
-  const tomorrowDescription =
-    tomorrow?.attributes?.descripcio || describeLevel(tomorrowLevel);
+  const tomorrowDescription = describeLevel(tomorrowLevel);
 
   return {
     title: config.title || "Pla Alfa",
