@@ -5,6 +5,7 @@ class RiscIncendisCard extends HTMLElement {
       tomorrow_entity: "sensor.pla_alfa_dema",
       title: "Pla Alfa",
       variant: "default",
+      animations: true,
       show_tomorrow: true,
       show_update: true,
     };
@@ -18,6 +19,7 @@ class RiscIncendisCard extends HTMLElement {
     this.config = {
       title: "Pla Alfa",
       variant: "default",
+      animations: true,
       show_tomorrow: true,
       show_update: true,
       ...config,
@@ -52,11 +54,12 @@ class RiscIncendisCard extends HTMLElement {
       : undefined;
     const model = buildModel(today, tomorrow, this.config);
     const variant = this.isCompact() ? "compact" : "default";
+    const animated = this.config.animations === false ? "" : "animated";
 
     this.attachShadowOnce();
     this.shadowRoot.innerHTML = `
       <style>${styles}</style>
-      <ha-card class="risk-card ${variant} level-${model.levelKey}" tabindex="0" role="button">
+      <ha-card class="risk-card ${variant} ${animated} level-${model.levelKey}" tabindex="0" role="button">
         <button class="more-info" aria-label="Mostra detalls de ${escapeHtml(model.title)}">
           <ha-icon icon="mdi:dots-horizontal"></ha-icon>
         </button>
@@ -292,12 +295,16 @@ const styles = `
     --risk-contrast: #ffffff;
     --risk-muted: rgba(255, 255, 255, 0.72);
     --risk-soft: rgba(255, 255, 255, 0.18);
+    --risk-drift-duration: 18s;
+    --risk-flame-duration: 3.8s;
+    --risk-flame-scale: 1.025;
     position: relative;
     overflow: hidden;
     padding: 18px;
     border-radius: 18px;
     color: var(--risk-contrast);
     background: var(--risk-bg);
+    background-size: 180% 180%;
     box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0, 0, 0, 0.18));
     cursor: pointer;
   }
@@ -330,6 +337,9 @@ const styles = `
     --risk-contrast: #123323;
     --risk-muted: rgba(18, 51, 35, 0.72);
     --risk-soft: rgba(15, 107, 61, 0.16);
+    --risk-drift-duration: 28s;
+    --risk-flame-duration: 6s;
+    --risk-flame-scale: 1.01;
   }
 
   .level-1 {
@@ -338,6 +348,9 @@ const styles = `
     --risk-contrast: #302500;
     --risk-muted: rgba(48, 37, 0, 0.7);
     --risk-soft: rgba(139, 101, 0, 0.14);
+    --risk-drift-duration: 24s;
+    --risk-flame-duration: 5.2s;
+    --risk-flame-scale: 1.018;
   }
 
   .level-2 {
@@ -346,6 +359,9 @@ const styles = `
     --risk-contrast: #2e1300;
     --risk-muted: rgba(46, 19, 0, 0.72);
     --risk-soft: rgba(141, 47, 0, 0.16);
+    --risk-drift-duration: 18s;
+    --risk-flame-duration: 4s;
+    --risk-flame-scale: 1.035;
   }
 
   .level-3 {
@@ -354,6 +370,9 @@ const styles = `
     --risk-contrast: #ffffff;
     --risk-muted: rgba(255, 255, 255, 0.76);
     --risk-soft: rgba(255, 255, 255, 0.18);
+    --risk-drift-duration: 13s;
+    --risk-flame-duration: 3.2s;
+    --risk-flame-scale: 1.05;
   }
 
   .level-4 {
@@ -362,6 +381,21 @@ const styles = `
     --risk-contrast: #ffffff;
     --risk-muted: rgba(255, 255, 255, 0.76);
     --risk-soft: rgba(255, 255, 255, 0.16);
+    --risk-drift-duration: 10s;
+    --risk-flame-duration: 2.8s;
+    --risk-flame-scale: 1.065;
+  }
+
+  .animated {
+    animation: risk-bg-drift var(--risk-drift-duration) ease-in-out infinite alternate;
+  }
+
+  .animated::before {
+    animation: risk-glow-drift calc(var(--risk-drift-duration) * 0.75) ease-in-out infinite alternate;
+  }
+
+  .animated::after {
+    animation: risk-shadow-drift calc(var(--risk-drift-duration) * 0.9) ease-in-out infinite alternate;
   }
 
   .hero,
@@ -466,6 +500,11 @@ const styles = `
     width: 86px;
     height: 104px;
     filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
+    transform-origin: 50% 86%;
+  }
+
+  .animated .flame {
+    animation: flame-breathe var(--risk-flame-duration) ease-in-out infinite;
   }
 
   .flame-outer,
@@ -488,6 +527,10 @@ const styles = `
     height: 38px;
     bottom: 14px;
     background: rgba(255, 255, 255, 0.72);
+  }
+
+  .animated .flame-inner {
+    animation: flame-core calc(var(--risk-flame-duration) * 0.82) ease-in-out infinite;
   }
 
   .level-label {
@@ -658,6 +701,69 @@ const styles = `
     font-weight: 800;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  @keyframes risk-bg-drift {
+    0% {
+      background-position: 0% 40%;
+    }
+    100% {
+      background-position: 100% 60%;
+    }
+  }
+
+  @keyframes risk-glow-drift {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.72;
+    }
+    100% {
+      transform: translate3d(-16px, 18px, 0) scale(1.08);
+      opacity: 0.95;
+    }
+  }
+
+  @keyframes risk-shadow-drift {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.85;
+    }
+    100% {
+      transform: translate3d(18px, -8px, 0) scale(1.06);
+      opacity: 0.62;
+    }
+  }
+
+  @keyframes flame-breathe {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1) rotate(-0.4deg);
+    }
+    50% {
+      transform: translate3d(0, -2px, 0) scale(var(--risk-flame-scale)) rotate(0.6deg);
+    }
+  }
+
+  @keyframes flame-core {
+    0%,
+    100% {
+      opacity: 0.68;
+      transform: translateX(-50%) rotate(-45deg) scale(0.96);
+    }
+    50% {
+      opacity: 0.9;
+      transform: translateX(-50%) rotate(-45deg) scale(1.05);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animated,
+    .animated::before,
+    .animated::after,
+    .animated .flame,
+    .animated .flame-inner {
+      animation: none;
+    }
   }
 
   @media (max-width: 420px) {

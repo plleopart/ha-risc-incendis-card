@@ -57,6 +57,7 @@ tomorrow_entity: sensor.santa_maria_de_besora_pla_alfa_dema
 | `tomorrow_entity` | no | Sensor with tomorrow's Pla Alfa level. |
 | `title` | no | Card title. Defaults to `Pla Alfa`. |
 | `variant` | no | `default` or `compact`. Defaults to `default`. |
+| `animations` | no | Enable subtle background and flame animations. Defaults to `true`. |
 | `show_tomorrow` | no | Show tomorrow preview. Defaults to `true`. |
 | `show_update` | no | Show source update timestamp. Defaults to `true`. |
 
