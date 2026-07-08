@@ -31,6 +31,16 @@ tomorrow_entity: sensor.pla_alfa_dema
 title: Pla Alfa
 ```
 
+Compact variant:
+
+```yaml
+type: custom:risc-incendis-card
+entity: sensor.pla_alfa_avui
+tomorrow_entity: sensor.pla_alfa_dema
+title: Pla Alfa
+variant: compact
+```
+
 If Home Assistant generated municipality-prefixed entity IDs, use those instead:
 
 ```yaml
@@ -46,8 +56,9 @@ tomorrow_entity: sensor.santa_maria_de_besora_pla_alfa_dema
 | `entity` | yes | Sensor with today's Pla Alfa level. |
 | `tomorrow_entity` | no | Sensor with tomorrow's Pla Alfa level. |
 | `title` | no | Card title. Defaults to `Pla Alfa`. |
+| `variant` | no | `default` or `compact`. Defaults to `default`. |
 | `show_tomorrow` | no | Show tomorrow preview. Defaults to `true`. |
-| `show_source` | no | Show source/update metadata. Defaults to `true`. |
+| `show_update` | no | Show source update timestamp. Defaults to `true`. |
 
 ## Visual Levels
 
@@ -62,7 +73,8 @@ tomorrow_entity: sensor.santa_maria_de_besora_pla_alfa_dema
 
 ## HACS Deployment
 
-This repository is intended to be installed as a HACS **Plugin**.
+This repository is intended to be installed as a HACS **Dashboard** custom
+repository.
 
 Repository structure:
 

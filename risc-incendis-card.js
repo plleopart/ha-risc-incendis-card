@@ -4,8 +4,9 @@ class RiscIncendisCard extends HTMLElement {
       entity: "sensor.pla_alfa_avui",
       tomorrow_entity: "sensor.pla_alfa_dema",
       title: "Pla Alfa",
+      variant: "default",
       show_tomorrow: true,
-      show_source: true,
+      show_update: true,
     };
   }
 
@@ -16,10 +17,15 @@ class RiscIncendisCard extends HTMLElement {
 
     this.config = {
       title: "Pla Alfa",
+      variant: "default",
       show_tomorrow: true,
-      show_source: true,
+      show_update: true,
       ...config,
     };
+
+    if (config.show_source === false && config.show_update === undefined) {
+      this.config.show_update = false;
+    }
   }
 
   set hass(hass) {
@@ -28,7 +34,11 @@ class RiscIncendisCard extends HTMLElement {
   }
 
   getCardSize() {
-    return 4;
+    return this.isCompact() ? 2 : 4;
+  }
+
+  isCompact() {
+    return this.config?.variant === "compact" || this.config?.compact === true;
   }
 
   render() {
@@ -41,72 +51,16 @@ class RiscIncendisCard extends HTMLElement {
       ? this._hass.states[this.config.tomorrow_entity]
       : undefined;
     const model = buildModel(today, tomorrow, this.config);
+    const variant = this.isCompact() ? "compact" : "default";
 
     this.attachShadowOnce();
     this.shadowRoot.innerHTML = `
       <style>${styles}</style>
-      <ha-card class="risk-card level-${model.levelKey}" tabindex="0" role="button">
+      <ha-card class="risk-card ${variant} level-${model.levelKey}" tabindex="0" role="button">
         <button class="more-info" aria-label="Mostra detalls de ${escapeHtml(model.title)}">
           <ha-icon icon="mdi:dots-horizontal"></ha-icon>
         </button>
-
-        <section class="hero">
-          <div class="heading">
-            <div class="eyebrow">${escapeHtml(model.title)}</div>
-            <div class="place">${escapeHtml(model.place)}</div>
-          </div>
-          <div class="source-pill">
-            <ha-icon icon="mdi:shield-check"></ha-icon>
-            <span>Font oficial</span>
-          </div>
-        </section>
-
-        <section class="main">
-          <div class="flame" aria-hidden="true">
-            <div class="flame-outer"></div>
-            <div class="flame-inner"></div>
-          </div>
-          <div class="level-block">
-            <div class="level-label">Avui</div>
-            <div class="level-value">${escapeHtml(model.levelLabel)}</div>
-            <div class="description">${escapeHtml(model.description)}</div>
-          </div>
-        </section>
-
-        <section class="scale" aria-label="Escala Pla Alfa">
-          ${[0, 1, 2, 3, 4]
-            .map(
-              (level) => `
-                <div class="scale-step ${model.level === level ? "active" : ""}">
-                  <span>${level}</span>
-                </div>
-              `,
-            )
-            .join("")}
-        </section>
-
-        <section class="details">
-          ${
-            this.config.show_tomorrow
-              ? `
-                <div class="detail tomorrow">
-                  <span class="detail-label">Demà</span>
-                  <span class="detail-value">${escapeHtml(model.tomorrowLabel)}</span>
-                </div>
-              `
-              : ""
-          }
-          ${
-            this.config.show_source
-              ? `
-                <div class="detail">
-                  <span class="detail-label">Actualitzat</span>
-                  <span class="detail-value">${escapeHtml(model.updated)}</span>
-                </div>
-              `
-              : ""
-          }
-        </section>
+        ${variant === "compact" ? renderCompact(model, this.config) : renderDefault(model, this.config)}
       </ha-card>
     `;
 
@@ -138,6 +92,109 @@ class RiscIncendisCard extends HTMLElement {
       this.attachShadow({ mode: "open" });
     }
   }
+}
+
+function renderDefault(model, config) {
+  return `
+    <section class="hero">
+      <div class="heading">
+        <div class="eyebrow">${escapeHtml(model.title)}</div>
+        <div class="place">${escapeHtml(model.place)}</div>
+      </div>
+      ${renderUpdated(model, config)}
+    </section>
+
+    <section class="main">
+      <div class="flame" aria-hidden="true">
+        <div class="flame-outer"></div>
+        <div class="flame-inner"></div>
+      </div>
+      <div class="level-block">
+        <div class="level-label">Avui</div>
+        <div class="level-value">${escapeHtml(model.levelLabel)}</div>
+        <div class="description">${escapeHtml(model.description)}</div>
+      </div>
+    </section>
+
+    ${renderScale(model, "horizontal")}
+    ${renderDetails(model, config)}
+  `;
+}
+
+function renderCompact(model, config) {
+  return `
+    <section class="compact-layout">
+      ${renderScale(model, "vertical")}
+      <div class="compact-body">
+        <section class="hero">
+          <div class="heading">
+            <div class="eyebrow">${escapeHtml(model.title)}</div>
+            <div class="place">${escapeHtml(model.place)}</div>
+          </div>
+          ${renderUpdated(model, config)}
+        </section>
+
+        <section class="compact-main">
+          <div>
+            <div class="level-label">Avui</div>
+            <div class="compact-value">${escapeHtml(model.levelLabel)}</div>
+          </div>
+          <div class="compact-summary">
+            <div class="description">${escapeHtml(model.description)}</div>
+            ${
+              config.show_tomorrow
+                ? `<div class="tomorrow-line">Demà: ${escapeHtml(model.tomorrowLabel)}</div>`
+                : ""
+            }
+          </div>
+        </section>
+      </div>
+    </section>
+  `;
+}
+
+function renderUpdated(model, config) {
+  if (!config.show_update) {
+    return "";
+  }
+
+  return `
+    <div class="updated-pill">
+      <span>Actualitzat</span>
+      <strong>${escapeHtml(model.updated)}</strong>
+    </div>
+  `;
+}
+
+function renderScale(model, direction) {
+  return `
+    <section class="scale ${direction}" aria-label="Escala Pla Alfa">
+      ${[0, 1, 2, 3, 4]
+        .map(
+          (level) => `
+            <div class="scale-step ${model.level === level ? "active" : ""}">
+              <span>${level}</span>
+            </div>
+          `,
+        )
+        .join("")}
+    </section>
+  `;
+}
+
+function renderDetails(model, config) {
+  if (!config.show_tomorrow) {
+    return "";
+  }
+
+  return `
+    <section class="details">
+      <div class="detail tomorrow">
+        <span class="detail-label">Demà</span>
+        <span class="detail-value">${escapeHtml(model.tomorrowLabel)}</span>
+      </div>
+    </section>
+  `;
 }
 
 function buildModel(today, tomorrow, config) {
@@ -234,7 +291,7 @@ const styles = `
     --risk-accent: #d7dde2;
     --risk-contrast: #ffffff;
     --risk-muted: rgba(255, 255, 255, 0.72);
-    --risk-soft: rgba(255, 255, 255, 0.16);
+    --risk-soft: rgba(255, 255, 255, 0.18);
     position: relative;
     overflow: hidden;
     padding: 18px;
@@ -310,7 +367,8 @@ const styles = `
   .hero,
   .main,
   .scale,
-  .details {
+  .details,
+  .compact-layout {
     position: relative;
     z-index: 1;
   }
@@ -338,22 +396,34 @@ const styles = `
     font-weight: 800;
   }
 
-  .source-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
+  .updated-pill {
+    display: grid;
+    justify-items: end;
     flex: 0 0 auto;
-    padding: 6px 8px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
+    max-width: 120px;
+    padding: 6px 9px;
+    border-radius: 12px;
     color: var(--risk-contrast);
     background: var(--risk-soft);
   }
 
-  .source-pill ha-icon {
-    width: 15px;
-    height: 15px;
+  .updated-pill span {
+    font-size: 10px;
+    line-height: 1.1;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--risk-muted);
+  }
+
+  .updated-pill strong {
+    margin-top: 2px;
+    overflow: hidden;
+    max-width: 100%;
+    font-size: 13px;
+    line-height: 1.15;
+    font-weight: 900;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .more-info {
@@ -442,16 +512,23 @@ const styles = `
     font-weight: 800;
   }
 
-  .scale {
+  .scale.horizontal {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 8px;
     margin-top: 20px;
   }
 
+  .scale.vertical {
+    display: grid;
+    grid-template-rows: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    width: 34px;
+  }
+
   .scale-step {
     position: relative;
-    height: 30px;
+    min-height: 30px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.26);
   }
@@ -477,7 +554,7 @@ const styles = `
 
   .details {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
     margin-top: 14px;
   }
@@ -510,6 +587,79 @@ const styles = `
     white-space: nowrap;
   }
 
+  .compact {
+    min-height: 132px;
+    padding: 14px;
+  }
+
+  .compact::before {
+    width: 130px;
+    height: 130px;
+  }
+
+  .compact::after {
+    width: 120px;
+    height: 120px;
+  }
+
+  .compact-layout {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 14px;
+    align-items: stretch;
+  }
+
+  .compact-body {
+    min-width: 0;
+  }
+
+  .compact .place {
+    font-size: 16px;
+  }
+
+  .compact .updated-pill {
+    max-width: 105px;
+    padding: 5px 8px;
+  }
+
+  .compact-main {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 14px;
+    align-items: end;
+    margin-top: 18px;
+  }
+
+  .compact-value {
+    margin-top: 2px;
+    font-size: 58px;
+    line-height: 0.9;
+    font-weight: 950;
+  }
+
+  .compact-summary {
+    min-width: 0;
+    padding-bottom: 4px;
+  }
+
+  .compact .description {
+    overflow: hidden;
+    margin-top: 0;
+    font-size: 17px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tomorrow-line {
+    overflow: hidden;
+    margin-top: 7px;
+    color: var(--risk-muted);
+    font-size: 14px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   @media (max-width: 420px) {
     ha-card {
       padding: 16px;
@@ -519,7 +669,8 @@ const styles = `
       display: block;
     }
 
-    .source-pill {
+    .updated-pill {
+      justify-items: start;
       margin-top: 10px;
     }
 
@@ -545,10 +696,6 @@ const styles = `
 
     .level-value {
       font-size: 62px;
-    }
-
-    .details {
-      grid-template-columns: 1fr;
     }
   }
 `;
